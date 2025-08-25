@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { Mic, MicOff, Settings, Trash2, Copy, Volume2 } from 'lucide-react'
+import { Mic, MicOff, Trash2, Copy, Volume2 } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { WebSocketClient, WebSocketStatus } from '@/lib/websocket'

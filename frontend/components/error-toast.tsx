@@ -42,7 +42,7 @@ export function ErrorToast({
     setIsExiting(true)
     setTimeout(() => {
       setIsVisible(false)
-      onClose()
+      onClose?.()
     }, 300)
   }
 

@@ -4,13 +4,13 @@ import { startAudioStream } from "../lib/audioStream";
 
 export default function InterviewPage() {
   const [tips, setTips] = useState<string[]>([]);
-  const [follow, setFollow] = useState<string | null>(null);
+  const [follow, setFollow] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     startAudioStream((msg) => {
       const data = JSON.parse(msg);
       setTips(data.bullets || []);
-      setFollow(data.follow_up || null);
+      setFollow(data.follow_up || undefined);
     });
   }, []);
 

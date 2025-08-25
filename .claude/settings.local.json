@@ -3,7 +3,11 @@
     "allow": [
       "Bash(chmod:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run lint)",
+      "Bash(npm install)"
     ],
     "deny": [],
     "ask": []
