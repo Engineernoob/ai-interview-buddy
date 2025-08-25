@@ -161,48 +161,8 @@ async def upload_documents(
 @app.websocket("/ws/audio")
 async def audio_socket(ws: WebSocket):
     """WebSocket endpoint for real-time audio processing"""
-    await ws.accept()
-    buffer = bytearray()
-    
-    try:
-        while True:
-            frame = await ws.receive_bytes()
-            buffer.extend(frame)
-            
-            # Process audio when buffer reaches threshold
-            if len(buffer) > 32000:  # ~2 seconds at 16kHz
-                try:
-                    # Transcribe audio
-                    text = transcribe_segment(bytes(buffer))
-                    buffer.clear()
-                    
-                    if text and len(text.strip()) > 0:
-                        # Detect intent
-                        intent = detect_intent(text)
-                        
-                        # Retrieve context
-                        ctx = retrieve_context(text, intent)
-                        
-                        # Generate suggestions
-                        tips = generate_suggestions(text, intent, ctx)
-                        
-                        # Add transcript to response
-                        tips["transcript"] = text
-                        
-                        # Send response
-                        await ws.send_json(tips)
-                        
-                except Exception as e:
-                    logger.error(f"Audio processing error: {e}")
-                    await ws.send_json({
-                        "bullets": ["Error processing audio"],
-                        "follow_up": None,
-                        "error": str(e)
-                    })
-                    
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await ws.close()
+    from websocket import websocket_endpoint
+    await websocket_endpoint(ws)
 
 @app.get("/health")
 async def health_check(detailed: bool = False):

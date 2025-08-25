@@ -90,24 +90,20 @@ class ConnectionManager:
                     "data": {"status": "generating", "message": "Generating response suggestion..."}
                 })
                 
-                ai_suggestion = await self.ai_service.generate_response_suggestion(
+                ai_coaching = await self.ai_service.generate_coaching_response(
                     transcription,
                     conversation_history=self.ai_service.get_conversation_history()
                 )
                 
-                if ai_suggestion:
+                if ai_coaching:
                     await self.send_message(session_id, {
-                        "type": "ai_response",
-                        "data": {
-                            "suggestion": ai_suggestion,
-                            "original_text": transcription,
-                            "timestamp": datetime.now().isoformat()
-                        }
+                        "type": "coaching",
+                        "data": ai_coaching
                     })
                 else:
                     await self.send_message(session_id, {
                         "type": "error",
-                        "data": {"message": "Failed to generate AI response"}
+                        "data": {"message": "Failed to generate AI coaching response"}
                     })
             else:
                 await self.send_message(session_id, {

@@ -14,34 +14,39 @@ class AIService:
         self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
         self.conversation_history = []
     
-    async def generate_response_suggestion(
+    async def generate_coaching_response(
         self, 
         transcribed_text: str, 
         context: str = "job interview",
         conversation_history: List[str] = None
-    ) -> Optional[str]:
+    ) -> Optional[dict]:
+        """Generate coaching response in format expected by frontend"""
         try:
             # Build conversation context
             messages = [
                 {
                     "role": "system",
-                    "content": f"""You are an AI interview coach assistant. You help job candidates during interviews by providing intelligent response suggestions.
+                    "content": f"""You are an AI interview coach assistant. You help job candidates during interviews by providing coaching tips.
 
 Context: The user is in a {context} setting.
 
-Your role:
-1. Analyze the interviewer's question or statement
-2. Provide a concise, professional response suggestion
-3. Make suggestions that are authentic and conversational
-4. Focus on highlighting relevant skills and experience
-5. Keep responses under 100 words
+Your task:
+1. Analyze what the interviewer said: '{transcribed_text}'
+2. Provide 2-4 bullet point coaching tips
+3. Suggest a follow-up question they could ask
+4. Keep tips concise and actionable
+
+Return your response as JSON with this exact format:
+{{
+  "bullets": ["tip 1", "tip 2", "tip 3"],
+  "follow_up": "suggested follow-up question"
+}}
 
 Guidelines:
-- Be professional but natural
-- Avoid generic responses
-- Focus on specific, actionable suggestions
-- Don't provide responses that sound scripted
-- Consider the conversation flow"""
+- Be professional but encouraging
+- Focus on specific, actionable advice
+- Make bullets 1-2 sentences each
+- Follow-up should be relevant to the interview context"""
                 }
             ]
             
@@ -54,7 +59,7 @@ Guidelines:
             # Add current transcription
             messages.append({
                 "role": "user",
-                "content": f"Interviewer said: '{transcribed_text}'\n\nPlease provide a professional response suggestion that would work well in this interview context."
+                "content": f"Interviewer said: '{transcribed_text}'\n\nPlease provide coaching tips in the exact JSON format specified."
             })
             
             response = await self.client.chat.completions.create(
@@ -67,9 +72,24 @@ Guidelines:
             )
             
             suggestion = response.choices[0].message.content.strip()
-            logger.info(f"Generated AI response suggestion for: '{transcribed_text[:50]}...'")
+            logger.info(f"Generated AI coaching response for: '{transcribed_text[:50]}...'")
             
-            return suggestion
+            # Parse JSON response
+            import json
+            try:
+                coaching_data = json.loads(suggestion)
+                # Ensure required keys exist
+                if 'bullets' not in coaching_data:
+                    coaching_data['bullets'] = ["Consider the key points you want to highlight"]
+                if 'follow_up' not in coaching_data:
+                    coaching_data['follow_up'] = "What would you like to know about this role?"
+                return coaching_data
+            except json.JSONDecodeError:
+                # Fallback if JSON parsing fails
+                return {
+                    "bullets": ["Take a moment to think about your response", "Focus on relevant experience", "Be specific with examples"],
+                    "follow_up": "What aspects of this role excite you most?"
+                }
             
         except Exception as e:
             logger.error(f"AI response generation failed: {e}")

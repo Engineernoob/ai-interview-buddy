@@ -8,9 +8,16 @@ if [ ! -f "backend/.env" ]; then
     exit 1
 fi
 
-# Check if OpenAI API key is set
-if ! grep -q "OPENAI_API_KEY=" backend/.env || grep -q "OPENAI_API_KEY=your-openai-api-key-here" backend/.env; then
-    echo "❌ OpenAI API key not configured. Please edit backend/.env and add your API key."
+# Check LLM configuration
+if grep -q "USE_LOCAL_LLM=true" backend/.env; then
+    echo "📋 Using local LLM (Ollama) - make sure Ollama is running"
+    echo "   If Ollama is not installed, run: curl -fsSL https://ollama.ai/install.sh | sh"
+    echo "   Then run: ollama run llama2"
+elif ! grep -q "OPENAI_API_KEY=" backend/.env || grep -q "OPENAI_API_KEY=your-openai-api-key-here" backend/.env; then
+    echo "❌ Neither local LLM nor OpenAI API key configured."
+    echo "   Please either:"
+    echo "   1. Set USE_LOCAL_LLM=true and install Ollama, or"
+    echo "   2. Add your OpenAI API key to backend/.env"
     exit 1
 fi
 
