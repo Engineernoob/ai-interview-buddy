@@ -6,7 +6,8 @@ import time
 import logging
 from typing import Dict, List
 from fastapi import Request, Response
-from fastapi.middleware.base import BaseHTTPMiddleware
+# Fix: Updated import path for FastAPI middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from utils.config import get_config
 
 logger = logging.getLogger(__name__)
