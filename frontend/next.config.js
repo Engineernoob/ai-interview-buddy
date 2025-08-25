@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
-  },
+  // Remove deprecated experimental.appDir - it's now default in Next.js 14
+
   // PWA configuration
   async headers() {
     return [
