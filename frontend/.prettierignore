@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Generated files
+.next/
+.cache/
+public/sw.js
+public/workbox-*.js
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Config files that shouldn't be formatted
+*.min.js
+*.min.css

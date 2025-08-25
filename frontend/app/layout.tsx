@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -28,9 +29,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="AI Interview Buddy" />
       </head>
       <body className={inter.className}>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-          {children}
-        </div>
+        <ErrorBoundary>
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+            {children}
+          </div>
+        </ErrorBoundary>
       </body>
     </html>
   )

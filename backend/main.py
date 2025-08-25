@@ -1,11 +1,29 @@
 import os
 import logging
-from fastapi import FastAPI, WebSocket, File, UploadFile, Form
+from fastapi import FastAPI, WebSocket, File, UploadFile, Form, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import PyPDF2
 import io
+
+from utils.errors import (
+    AppError, 
+    ValidationError, 
+    FileProcessingError,
+    handle_unexpected_error,
+    create_error_response,
+    COMMON_ERRORS,
+    ErrorCode
+)
+from utils.config import get_config, validate_required_config, get_service_status
+from utils.health import get_health_checker
+from utils.middleware import (
+    SecurityHeadersMiddleware,
+    RequestLoggingMiddleware,
+    RateLimitMiddleware,
+    CacheControlMiddleware
+)
 
 from services.transcription import transcribe_segment
 from services.intent import detect_intent
@@ -16,30 +34,51 @@ from services.pdf_parser import extract_pdf_text, validate_pdf_content
 # Load environment variables
 load_dotenv()
 
+# Load and validate configuration
+config = get_config()
+config_errors = validate_required_config(config)
+
+if config_errors:
+    print("Configuration errors found:")
+    for error in config_errors:
+        print(f"  - {error}")
+    exit(1)
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, config.log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+logger.info(f"Starting AI Interview Buddy API in {config.environment} mode")
 
 # Create FastAPI app
 app = FastAPI(
     title="AI Interview Buddy API",
     description="Real-time AI-powered interview assistant with audio processing",
-    version="1.0.0"
+    version="1.0.0",
+    debug=config.debug
 )
 
-# Configure CORS
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://localhost:3000").split(",")
+# Add security middleware (order matters!)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CacheControlMiddleware)
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=config.security.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Add operational middleware
+if config.environment.value != "testing":
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RateLimitMiddleware)
 
 @app.get("/")
 async def root():
@@ -61,62 +100,63 @@ async def upload_documents(
     job_description: str = Form(...)
 ):
     """Upload resume and job description for personalized coaching"""
+    # Validate job description
+    if not job_description or len(job_description.strip()) < 10:
+        raise ValidationError("Job description must be at least 10 characters long", "job_description")
+    
+    # Validate file size
+    resume_content = await resume.read()
+    
+    if len(resume_content) > config.security.max_file_size:
+        raise AppError(
+            f"File too large. Maximum size is {config.security.max_file_size // (1024*1024)}MB.",
+            ErrorCode.FILE_TOO_LARGE,
+            413,
+            details={"file_size": len(resume_content), "max_size": config.security.max_file_size}
+        )
+    
+    # Validate PDF before processing
+    if resume.content_type != "application/pdf":
+        raise COMMON_ERRORS["unsupported_file"]
+    
+    # Validate PDF content
+    is_valid, validation_message = validate_pdf_content(resume_content)
+    if not is_valid:
+        raise FileProcessingError(
+            f"Invalid PDF: {validation_message}",
+            filename=resume.filename
+        )
+    
+    # Extract text from PDF resume with multiple methods
     try:
-        # Validate file size (10MB limit)
-        MAX_FILE_SIZE = 10 * 1024 * 1024
-        resume_content = await resume.read()
-        
-        if len(resume_content) > MAX_FILE_SIZE:
-            return JSONResponse(
-                status_code=413,
-                content={"message": "File too large. Maximum size is 10MB."}
-            )
-        
-        # Validate PDF before processing
-        if resume.content_type != "application/pdf":
-            return JSONResponse(
-                status_code=400,
-                content={"message": "Only PDF files are supported for resume upload"}
-            )
-        
-        # Validate PDF content
-        is_valid, validation_message = validate_pdf_content(resume_content)
-        if not is_valid:
-            return JSONResponse(
-                status_code=400,
-                content={"message": f"Invalid PDF: {validation_message}"}
-            )
-        
-        # Extract text from PDF resume with multiple methods
         resume_text = await extract_pdf_text(resume_content, resume.filename or "resume.pdf")
-        
-        # Validate extracted text
-        if not resume_text or len(resume_text.strip()) < 50:
-            return JSONResponse(
-                status_code=422,
-                content={
-                    "message": "Could not extract sufficient text from PDF. Please ensure the PDF contains readable text (not just images)."
-                }
-            )
-        
-        # Store documents in retriever
+    except Exception as e:
+        raise FileProcessingError(
+            "Failed to extract text from PDF",
+            filename=resume.filename
+        ) from e
+    
+    # Validate extracted text
+    if not resume_text or len(resume_text.strip()) < 50:
+        raise COMMON_ERRORS["insufficient_text"]
+    
+    # Store documents in retriever
+    try:
         resume_success = retriever.store_resume(resume_text, resume.filename)
         jd_success = retriever.store_job_description(job_description)
         
-        if resume_success and jd_success:
-            return {"message": "Documents uploaded successfully"}
-        else:
-            return JSONResponse(
-                status_code=500,
-                content={"message": "Failed to store documents"}
-            )
-    
+        if not (resume_success and jd_success):
+            raise COMMON_ERRORS["storage_failed"]
+        
+        return {"message": "Documents uploaded successfully"}
+        
     except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Upload failed: {str(e)}"}
-        )
+        raise AppError(
+            "Failed to store documents",
+            ErrorCode.STORAGE_ERROR,
+            500,
+            details={"filename": resume.filename}
+        ) from e
 
 @app.websocket("/ws/audio")
 async def audio_socket(ws: WebSocket):
@@ -165,57 +205,56 @@ async def audio_socket(ws: WebSocket):
         await ws.close()
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    use_local_llm = os.getenv("USE_LOCAL_LLM", "true").lower() == "true"
-    
-    return {
-        "status": "healthy",
-        "message": "All systems operational",
-        "services": {
-            "local_llm": "enabled" if use_local_llm else "disabled",
-            "whisper": "available",
-            "websocket": "available",
-            "document_upload": "available"
-        }
-    }
+async def health_check(detailed: bool = False):
+    """Comprehensive health check endpoint"""
+    health_checker = get_health_checker()
+    return await health_checker.check_all(include_details=detailed)
 
 @app.get("/config")
-async def get_config():
+async def get_app_config():
     """Get API configuration"""
-    return {
-        "whisper_model": os.getenv("WHISPER_MODEL", "base"),
-        "llm_model": os.getenv("LLM_MODEL", "llama2"),
-        "use_local_llm": os.getenv("USE_LOCAL_LLM", "true").lower() == "true",
-        "websocket_url": "/ws/audio",
-        "features": [
-            "real_time_transcription",
-            "local_llm_coaching", 
-            "resume_upload",
-            "job_description_analysis",
-            "intent_detection"
-        ]
-    }
+    return get_service_status(config)
+
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    """Handle application-specific errors."""
+    exc.log(logger)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(exc)
+    )
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError):
+    """Handle validation errors."""
+    exc.log(logger, logging.WARNING)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(exc)
+    )
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Global exception: {exc}")
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected exceptions."""
+    app_error = handle_unexpected_error(exc, f"{request.method} {request.url.path}")
+    app_error.log(logger)
     return JSONResponse(
-        status_code=500,
-        content={"message": "Internal server error", "detail": str(exc)}
+        status_code=app_error.status_code,
+        content=create_error_response(app_error)
     )
 
 if __name__ == "__main__":
     import uvicorn
     
-    logger.info("Starting AI Interview Buddy API server with free/open-source components...")
-    logger.info("Using Ollama for local LLM inference")
-    logger.info("Using Whisper for speech recognition")
+    logger.info("Starting AI Interview Buddy API server...")
+    logger.info(f"Using {'Ollama' if config.llm.use_local else 'OpenAI'} for LLM inference")
+    logger.info(f"Using Whisper model: {config.whisper.model}")
+    logger.info(f"CORS origins: {config.security.cors_origins}")
     
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        host=config.host,
+        port=config.port,
+        reload=config.debug,
+        log_level=config.log_level.lower()
     )

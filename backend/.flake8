@@ -1,0 +1,28 @@
+[flake8]
+max-line-length = 100
+extend-ignore = 
+    # Black compatibility
+    E203,  # whitespace before ':'
+    W503,  # line break before binary operator
+    # Specific rules we want to ignore
+    E501,  # line too long (handled by black)
+    F401,  # imported but unused (handled by isort/mypy)
+
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    .pytest_cache,
+    .mypy_cache,
+    build,
+    dist,
+    *.egg-info
+
+per-file-ignores =
+    __init__.py:F401
+    tests/*:F401,F811,S101
+    conftest.py:F401
+
+max-complexity = 12
+docstring-convention = google

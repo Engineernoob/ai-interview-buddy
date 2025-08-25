@@ -1,0 +1,6 @@
+[bandit]
+exclude_dirs = tests,venv,.venv
+skips = B101,B601
+
+# B101 - Use of assert detected
+# B601 - paramiko calls with shell=True

@@ -116,3 +116,111 @@ temp/
 *.mp3
 *.m4a
 *.aac
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Python virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Security and secrets
+*.pem
+*.key
+*.crt
+*.p12
+secrets.json
+credentials.json
+config.local.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# IDE specific files
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace
+
+# MacOS
+.AppleDouble
+.LSOverride
+Icon?
+
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# Local development files
+.env.local
+.env.*.local
+local_config.py
+debug.log
+
+# Build artifacts
+*.tar.gz
+*.zip
+*.dmg
+*.pkg
+*.deb
+*.rpm
+
+# Temporary files
+.tmp/
+*.tmp
+*.temp
+
+# ML models (if large)
+*.model
+*.pkl
+*.joblib
+models/
+checkpoints/
+
+# Application specific
+uploads/
+downloads/
+cache/
+sessions/
+.session/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Cloud provider files
+.aws/
+.azure/
+.gcp/
